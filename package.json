@@ -1,0 +1,51 @@
+{
+  "name": "optkit",
+  "version": "0.0.1",
+  "description": "Newsletter subscribers for Cloudflare Workers. SQL-backed, queue-powered, RPC-first.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./do": "./src/do.ts",
+    "./schema": "./src/schema.ts",
+    "./types": "./src/types.ts",
+    "./queue": "./src/queue.ts",
+    "./admin": "./src/admin.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "durable-objects",
+    "newsletter",
+    "subscribers",
+    "email",
+    "queue"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/acoyfellow/optkit.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.7",
+    "effect": "^3.18.4"
+  },
+  "peerDependencies": {
+    "hono": "^4.9.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241106.0",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "build": "echo 'optkit: TypeScript source, no build needed'",
+    "prepublishOnly": "echo 'Ready to publish optkit'"
+  }
+}
