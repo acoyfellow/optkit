@@ -1,38 +1,6 @@
 import { EmailMessage } from "cloudflare:email";
+import { createMimeMessage } from "mimetext";
 import type { OptKitConfig, EmailTemplate } from "./types";
-
-// Simple MIME message builder for Workers (no Node.js deps)
-function createMimeMessage(from: string, to: string, subject: string, html: string, text?: string): string {
-  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-  const date = new Date().toUTCString();
-  
-  let message = `From: ${from}\r\n`;
-  message += `To: ${to}\r\n`;
-  message += `Subject: ${subject}\r\n`;
-  message += `Date: ${date}\r\n`;
-  message += `MIME-Version: 1.0\r\n`;
-  message += `Content-Type: multipart/alternative; boundary="${boundary}"\r\n`;
-  message += `\r\n`;
-  
-  if (text) {
-    message += `--${boundary}\r\n`;
-    message += `Content-Type: text/plain; charset=utf-8\r\n`;
-    message += `Content-Transfer-Encoding: 7bit\r\n`;
-    message += `\r\n`;
-    message += `${text}\r\n`;
-    message += `\r\n`;
-  }
-  
-  message += `--${boundary}\r\n`;
-  message += `Content-Type: text/html; charset=utf-8\r\n`;
-  message += `Content-Transfer-Encoding: 7bit\r\n`;
-  message += `\r\n`;
-  message += `${html}\r\n`;
-  message += `\r\n`;
-  message += `--${boundary}--\r\n`;
-  
-  return message;
-}
 
 const defaultOptInTemplate = (email: string): EmailTemplate => ({
   subject: "Welcome!",
@@ -90,18 +58,29 @@ async function sendEmail(
     throw new Error("senderEmail is required in OptKitConfig");
   }
 
-  const raw = createMimeMessage(
-    config.senderEmail,
-    to,
-    template.subject,
-    template.html,
-    template.text
-  );
+  const msg = createMimeMessage();
+  msg.setSender({ addr: config.senderEmail });
+  msg.setRecipient(to);
+  msg.setSubject(template.subject);
+
+  if (template.html) {
+    msg.addMessage({
+      contentType: "text/html",
+      data: template.html,
+    });
+  }
+
+  if (template.text) {
+    msg.addMessage({
+      contentType: "text/plain",
+      data: template.text,
+    });
+  }
 
   const emailMessage = new EmailMessage(
     config.senderEmail,
     to,
-    raw
+    msg.asRaw()
   ) as any;
 
   await config.email.send(emailMessage);
@@ -122,17 +101,19 @@ export async function sendCampaignBatch(
 
   for (const email of emails) {
     try {
-      const raw = createMimeMessage(
-        config.senderEmail!,
-        email,
-        subject,
-        html
-      );
+      const msg = createMimeMessage();
+      msg.setSender({ addr: config.senderEmail! });
+      msg.setRecipient(email);
+      msg.setSubject(subject);
+      msg.addMessage({
+        contentType: "text/html",
+        data: html,
+      });
 
       const emailMessage = new EmailMessage(
         config.senderEmail!,
         email,
-        raw
+        msg.asRaw()
       ) as any;
 
       await config.email.send(emailMessage);

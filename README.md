@@ -1,14 +1,6 @@
 # OptKit
 
-**Newsletter subscribers for Cloudflare Workers. SQL-backed, queue-powered, RPC-first.**
-
-[![npm](https://img.shields.io/npm/v/optkit)](https://www.npmjs.com/package/optkit)
-
-```bash
-npm install optkit
-# or
-bun add optkit
-```
+**Email subscriber management for Cloudflare Workers. SQL-backed storage, queue-powered campaigns, built-in admin dashboard.**
 
 ```ts
 import { optkit } from 'optkit';

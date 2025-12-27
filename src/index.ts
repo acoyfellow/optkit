@@ -55,18 +55,9 @@ export function optkit(config: OptKitConfig): OptKit {
       // Create campaign
       const campaignRecord = await stub.createCampaign(campaign);
 
-      // Get all active subscribers (paginate through all pages)
-      const activeEmails: string[] = [];
-      let page = 1;
-      const limit = 100; // Max per page from DO
-      let hasMore = true;
-
-      while (hasMore) {
-        const result = await stub.list({ status: "active", limit, page });
-        activeEmails.push(...result.subscribers.map((s: Subscriber) => s.email));
-        hasMore = result.hasMore;
-        page++;
-      }
+      // Get all active subscribers
+      const result = await stub.list({ status: "active", limit: 10000 });
+      const activeEmails = result.subscribers.map((s: Subscriber) => s.email);
 
       // Update campaign total
       await stub.updateCampaign(campaignRecord.id, {
@@ -74,7 +65,7 @@ export function optkit(config: OptKitConfig): OptKit {
         status: "sending",
       });
 
-      // Queue batches (50 emails per batch)
+      // Queue batches (50-100 emails per batch)
       const batchSize = 50;
       const batches: { campaignId: string; emails: string[]; subject: string; html: string }[] = [];
 

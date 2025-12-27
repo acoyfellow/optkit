@@ -148,20 +148,20 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
       `SELECT COUNT(*) as count FROM subscribers ${whereClause}`,
       ...whereParams
     );
-    const total = countResult.toArray()[0]?.count || 0;
+    const total = countResult.first()?.count || 0;
 
     // Get active/unsubscribed counts
     const activeResult = await this.ctx.storage.sql.exec(
       `SELECT COUNT(*) as count FROM subscribers WHERE status = 'active' ${search ? "AND email LIKE ?" : ""}`,
       ...(search ? [`%${search}%`] : [])
     );
-    const active = activeResult.toArray()[0]?.count || 0;
+    const active = activeResult.first()?.count || 0;
 
     const unsubscribedResult = await this.ctx.storage.sql.exec(
       `SELECT COUNT(*) as count FROM subscribers WHERE status = 'unsubscribed' ${search ? "AND email LIKE ?" : ""}`,
       ...(search ? [`%${search}%`] : [])
     );
-    const unsubscribed = unsubscribedResult.toArray()[0]?.count || 0;
+    const unsubscribed = unsubscribedResult.first()?.count || 0;
 
     // Get subscribers
     const result = await this.ctx.storage.sql.exec(
@@ -212,7 +212,7 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
       "SELECT * FROM campaigns WHERE id = ?",
       id
     );
-    const row = result.toArray()[0];
+    const row = result.first();
     if (!row) return null;
 
     return {
@@ -251,7 +251,7 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
       "SELECT * FROM subscribers WHERE email = ?",
       email
     );
-    const row = result.toArray()[0];
+    const row = result.first();
     if (!row) return null;
 
     return {
