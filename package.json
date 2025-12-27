@@ -1,6 +1,6 @@
 {
   "name": "optkit",
-  "version": "1.0.0",
+  "version": "1.0.01",
   "description": "Email subscriber management for Cloudflare Workers. SQL-backed storage, queue-powered campaigns, built-in admin dashboard.",
   "type": "module",
   "main": "./src/index.ts",
