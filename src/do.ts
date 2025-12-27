@@ -1,6 +1,8 @@
+import { Effect } from "effect";
 import { DurableObject } from "cloudflare:workers";
 import { subscribers, campaigns, type Subscriber, type Campaign } from "./schema";
 import type { QueryParams, QueryResult, CampaignInput, SubscriberStatus } from "./types";
+import { InvalidEmail, AlreadySubscribed, CampaignNotFound } from "./errors";
 
 export interface OptKitDOEnv {
   // No env needed for DO itself
@@ -52,30 +54,31 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
     return new Date().toISOString();
   }
 
-  // RPC Methods
+  // RPC Methods - These are called via RPC, so they return Promises
+  // The Effect wrapping happens in the optkit() function
 
   async optIn(email: string): Promise<Subscriber> {
     const normalized = this.normalizeEmail(email);
     if (!this.validateEmail(normalized)) {
-      throw new Error("Invalid email");
+      throw new InvalidEmail({ email: normalized });
     }
 
     // Check if exists
     const existing = await this.getSubscriber(normalized);
 
     if (existing?.status === "active") {
-      throw new Error("Already subscribed");
+      throw new AlreadySubscribed({ email: normalized });
     }
 
     const ts = this.nowIso();
     const subscriber: Subscriber = existing
       ? { ...existing, status: "active", updatedAt: ts }
       : {
-          email: normalized,
-          status: "active",
-          createdAt: ts,
-          updatedAt: ts,
-        };
+        email: normalized,
+        status: "active",
+        createdAt: ts,
+        updatedAt: ts,
+      };
 
     // Save to SQL
     await this.saveSubscriber(subscriber);
@@ -86,7 +89,7 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
   async optOut(email: string): Promise<Subscriber> {
     const normalized = this.normalizeEmail(email);
     if (!this.validateEmail(normalized)) {
-      throw new Error("Invalid email");
+      throw new InvalidEmail({ email: normalized });
     }
 
     const ts = this.nowIso();
@@ -95,11 +98,11 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
     const subscriber: Subscriber = existing
       ? { ...existing, status: "unsubscribed", updatedAt: ts }
       : {
-          email: normalized,
-          status: "unsubscribed",
-          createdAt: ts,
-          updatedAt: ts,
-        };
+        email: normalized,
+        status: "unsubscribed",
+        createdAt: ts,
+        updatedAt: ts,
+      };
 
     await this.saveSubscriber(subscriber);
 
@@ -133,7 +136,7 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
       whereParams.push(`%${search}%`);
     }
 
-    const whereClause = whereConditions.length > 0 
+    const whereClause = whereConditions.length > 0
       ? `WHERE ${whereConditions.join(" AND ")}`
       : "";
 
@@ -148,20 +151,20 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
       `SELECT COUNT(*) as count FROM subscribers ${whereClause}`,
       ...whereParams
     );
-    const total = countResult.first()?.count || 0;
+    const total = Number(countResult.toArray()[0]?.count) || 0;
 
     // Get active/unsubscribed counts
     const activeResult = await this.ctx.storage.sql.exec(
       `SELECT COUNT(*) as count FROM subscribers WHERE status = 'active' ${search ? "AND email LIKE ?" : ""}`,
       ...(search ? [`%${search}%`] : [])
     );
-    const active = activeResult.first()?.count || 0;
+    const active = Number(activeResult.toArray()[0]?.count) || 0;
 
     const unsubscribedResult = await this.ctx.storage.sql.exec(
       `SELECT COUNT(*) as count FROM subscribers WHERE status = 'unsubscribed' ${search ? "AND email LIKE ?" : ""}`,
       ...(search ? [`%${search}%`] : [])
     );
-    const unsubscribed = unsubscribedResult.first()?.count || 0;
+    const unsubscribed = Number(unsubscribedResult.toArray()[0]?.count) || 0;
 
     // Get subscribers
     const result = await this.ctx.storage.sql.exec(
@@ -190,7 +193,7 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
   async createCampaign(campaign: CampaignInput): Promise<Campaign> {
     const id = crypto.randomUUID();
     const ts = this.nowIso();
-    
+
     const campaignRecord: Campaign = {
       id,
       subject: campaign.subject,
@@ -212,26 +215,27 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
       "SELECT * FROM campaigns WHERE id = ?",
       id
     );
-    const row = result.first();
+    const rows = result.toArray();
+    const row = rows[0];
     if (!row) return null;
 
     return {
-      id: row.id,
-      subject: row.subject,
-      html: row.html,
-      status: row.status,
-      total: row.total,
-      sent: row.sent,
-      failed: row.failed,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      id: String(row.id),
+      subject: String(row.subject),
+      html: String(row.html),
+      status: String(row.status),
+      total: Number(row.total),
+      sent: Number(row.sent),
+      failed: Number(row.failed),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
     };
   }
 
   async updateCampaign(id: string, updates: Partial<Campaign>): Promise<Campaign> {
     const existing = await this.getCampaign(id);
     if (!existing) {
-      throw new Error("Campaign not found");
+      throw new CampaignNotFound({ campaignId: id });
     }
 
     const updated: Campaign = {
@@ -251,14 +255,15 @@ export class OptKitDO extends DurableObject<OptKitDOEnv> {
       "SELECT * FROM subscribers WHERE email = ?",
       email
     );
-    const row = result.first();
+    const rows = result.toArray();
+    const row = rows[0];
     if (!row) return null;
 
     return {
-      email: row.email,
-      status: row.status,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      email: String(row.email),
+      status: String(row.status),
+      createdAt: String(row.created_at),
+      updatedAt: String(row.updated_at),
     };
   }
 

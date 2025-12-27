@@ -1,4 +1,6 @@
+import type { Effect } from "effect";
 import type { Subscriber, Campaign } from "./schema";
+import type { InvalidEmail, AlreadySubscribed, CampaignNotFound, EmailSendError, DatabaseError } from "./errors";
 
 export type SubscriberStatus = "active" | "unsubscribed";
 export type CampaignStatus = "queued" | "sending" | "completed" | "failed";
@@ -48,12 +50,12 @@ export interface OptKitConfig {
 }
 
 export interface OptKit {
-  optIn(email: string): Promise<Subscriber>;
-  optOut(email: string): Promise<Subscriber>;
-  get(email: string): Promise<Subscriber | null>;
-  list(params?: QueryParams): Promise<QueryResult>;
-  sendCampaign(campaign: CampaignInput): Promise<Campaign>;
-  getCampaign(id: string): Promise<Campaign | null>;
+  optIn(email: string): Effect<Subscriber, InvalidEmail | AlreadySubscribed | EmailSendError | DatabaseError>;
+  optOut(email: string): Effect<Subscriber, InvalidEmail | EmailSendError | DatabaseError>;
+  get(email: string): Effect<Subscriber | null, DatabaseError>;
+  list(params?: QueryParams): Effect<QueryResult, DatabaseError>;
+  sendCampaign(campaign: CampaignInput): Effect<Campaign, DatabaseError>;
+  getCampaign(id: string): Effect<Campaign | null, CampaignNotFound | DatabaseError>;
 }
 
 export { type Subscriber, type Campaign };

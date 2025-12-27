@@ -1,6 +1,40 @@
+import { Effect } from "effect";
 import { EmailMessage } from "cloudflare:email";
-import { createMimeMessage } from "mimetext";
 import type { OptKitConfig, EmailTemplate } from "./types";
+import { EmailSendError } from "./errors";
+
+function createMimeMessage(from: string, to: string, subject: string, html?: string, text?: string): string {
+  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+  const parts: string[] = [];
+
+  if (text) {
+    parts.push(
+      `--${boundary}\r\n` +
+      `Content-Type: text/plain; charset=utf-8\r\n` +
+      `Content-Transfer-Encoding: quoted-printable\r\n\r\n` +
+      `${text}\r\n`
+    );
+  }
+
+  if (html) {
+    parts.push(
+      `--${boundary}\r\n` +
+      `Content-Type: text/html; charset=utf-8\r\n` +
+      `Content-Transfer-Encoding: quoted-printable\r\n\r\n` +
+      `${html}\r\n`
+    );
+  }
+
+  return [
+    `From: ${from}\r\n`,
+    `To: ${to}\r\n`,
+    `Subject: ${subject}\r\n`,
+    `MIME-Version: 1.0\r\n`,
+    `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n`,
+    parts.join(''),
+    `--${boundary}--\r\n`
+  ].join('');
+}
 
 const defaultOptInTemplate = (email: string): EmailTemplate => ({
   subject: "Welcome!",
@@ -20,110 +54,126 @@ const defaultNewSubscriberTemplate = (email: string): EmailTemplate => ({
   text: `New subscriber: ${email}`,
 });
 
-export async function sendOptInConfirmation(
+export function sendOptInConfirmation(
   email: string,
   config: OptKitConfig
-): Promise<void> {
+): Effect.Effect<void, EmailSendError> {
   const template = config.templates?.optIn || defaultOptInTemplate;
   const emailTemplate = template(email);
-  await sendEmail(email, emailTemplate, config);
+  return sendEmail(email, emailTemplate, config);
 }
 
-export async function sendOptOutConfirmation(
+export function sendOptOutConfirmation(
   email: string,
   config: OptKitConfig
-): Promise<void> {
+): Effect.Effect<void, EmailSendError> {
   const template = config.templates?.optOut || defaultOptOutTemplate;
   const emailTemplate = template(email);
-  await sendEmail(email, emailTemplate, config);
+  return sendEmail(email, emailTemplate, config);
 }
 
-export async function sendNewSubscriberNotification(
+export function sendNewSubscriberNotification(
   email: string,
   config: OptKitConfig
-): Promise<void> {
-  if (!config.adminEmail) return;
+): Effect.Effect<void, EmailSendError> {
+  if (!config.adminEmail) {
+    return Effect.void;
+  }
 
   const template = config.templates?.newSubscriber || defaultNewSubscriberTemplate;
   const emailTemplate = template(email);
-  await sendEmail(config.adminEmail, emailTemplate, config);
+  return sendEmail(config.adminEmail, emailTemplate, config);
 }
 
-async function sendEmail(
+function sendEmail(
   to: string,
   template: EmailTemplate,
   config: OptKitConfig
-): Promise<void> {
+): Effect.Effect<void, EmailSendError> {
   if (!config.senderEmail) {
-    throw new Error("senderEmail is required in OptKitConfig");
+    return Effect.fail(new EmailSendError({
+      email: to,
+      cause: new Error("senderEmail is required in OptKitConfig")
+    }));
   }
 
-  const msg = createMimeMessage();
-  msg.setSender({ addr: config.senderEmail });
-  msg.setRecipient(to);
-  msg.setSubject(template.subject);
+  return Effect.tryPromise({
+    try: async () => {
+      const raw = createMimeMessage(
+        config.senderEmail!,
+        to,
+        template.subject,
+        template.html,
+        template.text
+      );
 
-  if (template.html) {
-    msg.addMessage({
-      contentType: "text/html",
-      data: template.html,
-    });
-  }
+      const emailMessage = new EmailMessage(
+        config.senderEmail!,
+        to,
+        raw
+      );
 
-  if (template.text) {
-    msg.addMessage({
-      contentType: "text/plain",
-      data: template.text,
-    });
-  }
-
-  const emailMessage = new EmailMessage(
-    config.senderEmail,
-    to,
-    msg.asRaw()
-  ) as any;
-
-  await config.email.send(emailMessage);
+      await config.email.send(emailMessage);
+    },
+    catch: (error) => new EmailSendError({
+      email: to,
+      cause: error as Error
+    })
+  });
 }
 
-export async function sendCampaignBatch(
+export function sendCampaignBatch(
   emails: string[],
   subject: string,
   html: string,
   config: OptKitConfig
-): Promise<{ sent: number; failed: number }> {
+): Effect.Effect<{ sent: number; failed: number }, EmailSendError> {
   if (!config.senderEmail) {
-    throw new Error("senderEmail is required in OptKitConfig");
+    return Effect.fail(new EmailSendError({
+      email: emails[0] || "unknown",
+      cause: new Error("senderEmail is required in OptKitConfig")
+    }));
   }
 
-  let sent = 0;
-  let failed = 0;
+  return Effect.gen(function* () {
+    let sent = 0;
+    let failed = 0;
 
-  for (const email of emails) {
-    try {
-      const msg = createMimeMessage();
-      msg.setSender({ addr: config.senderEmail! });
-      msg.setRecipient(email);
-      msg.setSubject(subject);
-      msg.addMessage({
-        contentType: "text/html",
-        data: html,
-      });
+    for (const email of emails) {
+      const result = yield* Effect.either(
+        Effect.tryPromise({
+          try: async () => {
+            const raw = createMimeMessage(
+              config.senderEmail!,
+              email,
+              subject,
+              html
+            );
 
-      const emailMessage = new EmailMessage(
-        config.senderEmail!,
-        email,
-        msg.asRaw()
-      ) as any;
+            const emailMessage = new EmailMessage(
+              config.senderEmail!,
+              email,
+              raw
+            );
 
-      await config.email.send(emailMessage);
-      sent++;
-    } catch (error) {
-      failed++;
-      console.error(`Failed to send email to ${email}:`, error);
+            await config.email.send(emailMessage);
+          },
+          catch: (error) => new EmailSendError({
+            email,
+            cause: error as Error
+          })
+        })
+      );
+
+      if (result._tag === "Left") {
+        failed++;
+        console.error(`Failed to send email to ${email}:`, result.left);
+      } else {
+        sent++;
+      }
     }
-  }
 
-  return { sent, failed };
+    return { sent, failed };
+  });
 }
 

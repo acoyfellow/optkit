@@ -11,7 +11,7 @@
     "./schema": "./src/schema.ts",
     "./types": "./src/types.ts",
     "./queue": "./src/queue.ts",
-    "./admin": "./src/admin.ts"
+    "./admin": "./src/admin.tsx"
   },
   "files": [
     "src"
