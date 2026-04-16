@@ -36,7 +36,8 @@ export interface EmailTemplate {
 export interface OptKitConfig {
   do: DurableObjectNamespace;
   queue: Queue;
-  email: {
+  /** Cloudflare send_email binding. Required for campaigns, optional for subscriber management only. */
+  email?: {
     send(message: EmailMessage): Promise<void>;
   };
   templates?: {
@@ -46,7 +47,10 @@ export interface OptKitConfig {
   };
   validateEmail?: (email: string) => boolean;
   adminEmail?: string;
+  /** Must be an address on a domain with Email Routing enabled. */
   senderEmail?: string;
+  /** Display name for the sender (e.g. "My Newsletter"). Defaults to senderEmail. */
+  senderName?: string;
 }
 
 export interface OptKit {

@@ -1,6 +1,6 @@
 {
   "name": "optkit",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Email subscriber management for Cloudflare Workers. SQL-backed storage, queue-powered campaigns, built-in admin dashboard.",
   "type": "module",
   "main": "./src/index.ts",
@@ -23,7 +23,10 @@
     "newsletter",
     "subscribers",
     "email",
-    "queue"
+    "email-routing",
+    "send-email",
+    "queue",
+    "cloudflare-email"
   ],
   "license": "MIT",
   "repository": {
@@ -35,13 +38,14 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.44.7",
-    "effect": "^3.18.4"
+    "effect": "^3.18.4",
+    "mimetext": "^3.0.24"
   },
   "peerDependencies": {
     "hono": "^4.9.7"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241106.0",
+    "@cloudflare/workers-types": "^4.20250410.0",
     "typescript": "^5.9.3"
   },
   "scripts": {
