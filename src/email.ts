@@ -33,11 +33,13 @@ function buildMimeMessage(
   msg.setRecipient(to);
   msg.setSubject(template.subject);
 
-  if (template.html) {
-    msg.addMessage({ contentType: "text/html", data: template.html });
-  }
+  // text/plain must come before text/html in multipart/alternative
+  // (clients pick the last supported part)
   if (template.text) {
     msg.addMessage({ contentType: "text/plain", data: template.text });
+  }
+  if (template.html) {
+    msg.addMessage({ contentType: "text/html", data: template.html });
   }
 
   return msg.asRaw();

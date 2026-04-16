@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { OptKitConfig } from "./types";
 import { sendCampaignBatch } from "./email";
-import { DatabaseError, CampaignNotFound } from "./errors";
+import { DatabaseError, CampaignNotFound, EmailSendError } from "./errors";
 
 export interface QueueMessage {
   campaignId: string;
@@ -56,8 +56,25 @@ export async function processCampaignBatch(
     if (result._tag === "Success") {
       message.ack();
     } else {
-      console.error(`Failed to process campaign batch ${campaignId}:`, result.cause);
-      message.retry();
+      const cause = result.cause;
+      console.error(`Failed to process campaign batch ${campaignId}:`, cause);
+
+      // Config errors (missing email binding, missing senderEmail) are terminal —
+      // retrying won't fix them. Ack + mark campaign as failed.
+      const isConfigError = cause && 'error' in cause
+        && cause.error instanceof EmailSendError
+        && cause.error.cause?.message?.includes('is required');
+
+      if (isConfigError) {
+        try {
+          await stub.updateCampaign(campaignId, { status: "failed" });
+        } catch (e) {
+          console.error(`Failed to mark campaign ${campaignId} as failed:`, e);
+        }
+        message.ack(); // Don't retry config errors
+      } else {
+        message.retry();
+      }
     }
   }
 }

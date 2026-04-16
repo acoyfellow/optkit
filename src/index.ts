@@ -93,6 +93,20 @@ export function optkit(config: OptKitConfig): OptKit {
 
     sendCampaign(campaign: CampaignInput) {
       return Effect.gen(function* () {
+        // Validate email binding exists before creating campaign/enqueueing
+        if (!config.email) {
+          return yield* Effect.fail(new DatabaseError({
+            operation: "sendCampaign",
+            cause: new Error("email binding (send_email) is required for campaigns — see https://developers.cloudflare.com/email-routing/email-workers/send-email-workers/")
+          }));
+        }
+        if (!config.senderEmail) {
+          return yield* Effect.fail(new DatabaseError({
+            operation: "sendCampaign",
+            cause: new Error("senderEmail is required in OptKitConfig for campaigns")
+          }));
+        }
+
         // Create campaign
         const campaignRecord = yield* Effect.tryPromise({
           try: () => stub.createCampaign(campaign) as Promise<Campaign>,
