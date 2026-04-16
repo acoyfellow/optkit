@@ -1,0 +1,56 @@
+{
+  "name": "my-newsletter",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SUBSCRIBERS_DO",
+        "class_name": "OptKitDO"
+      }
+    ]
+  },
+
+  "queues": {
+    "producers": [
+      {
+        "binding": "EMAIL_QUEUE",
+        "queue": "email-campaigns"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "email-campaigns",
+        "max_batch_size": 10,
+        "max_retries": 3
+      }
+    ]
+  },
+
+  // Cloudflare Email Routing — send_email binding
+  // Docs: https://developers.cloudflare.com/email-routing/email-workers/send-email-workers/
+  //
+  // No restrictions (can send to any verified Email Routing address):
+  "send_email": [
+    { "name": "SEND_EMAIL" }
+  ],
+
+  // Alternative: lock to specific destination(s)
+  // "send_email": [
+  //   {
+  //     "name": "SEND_EMAIL",
+  //     "allowed_destination_addresses": ["subscriber1@example.com", "subscriber2@example.com"]
+  //   }
+  // ],
+
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["OptKitDO"] }
+  ],
+
+  "vars": {
+    "SENDER_EMAIL": "newsletter@yourdomain.com",
+    "SENDER_NAME": "My Newsletter"
+  }
+}

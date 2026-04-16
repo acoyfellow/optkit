@@ -1,40 +1,8 @@
 import { Effect } from "effect";
 import { EmailMessage } from "cloudflare:email";
+import { createMimeMessage } from "mimetext";
 import type { OptKitConfig, EmailTemplate } from "./types";
 import { EmailSendError } from "./errors";
-
-function createMimeMessage(from: string, to: string, subject: string, html?: string, text?: string): string {
-  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substring(2)}`;
-  const parts: string[] = [];
-
-  if (text) {
-    parts.push(
-      `--${boundary}\r\n` +
-      `Content-Type: text/plain; charset=utf-8\r\n` +
-      `Content-Transfer-Encoding: quoted-printable\r\n\r\n` +
-      `${text}\r\n`
-    );
-  }
-
-  if (html) {
-    parts.push(
-      `--${boundary}\r\n` +
-      `Content-Type: text/html; charset=utf-8\r\n` +
-      `Content-Transfer-Encoding: quoted-printable\r\n\r\n` +
-      `${html}\r\n`
-    );
-  }
-
-  return [
-    `From: ${from}\r\n`,
-    `To: ${to}\r\n`,
-    `Subject: ${subject}\r\n`,
-    `MIME-Version: 1.0\r\n`,
-    `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n`,
-    parts.join(''),
-    `--${boundary}--\r\n`
-  ].join('');
-}
 
 const defaultOptInTemplate = (email: string): EmailTemplate => ({
   subject: "Welcome!",
@@ -54,13 +22,33 @@ const defaultNewSubscriberTemplate = (email: string): EmailTemplate => ({
   text: `New subscriber: ${email}`,
 });
 
+function buildMimeMessage(
+  from: string,
+  to: string,
+  template: EmailTemplate,
+  senderName?: string,
+): string {
+  const msg = createMimeMessage();
+  msg.setSender({ name: senderName ?? from, addr: from });
+  msg.setRecipient(to);
+  msg.setSubject(template.subject);
+
+  if (template.html) {
+    msg.addMessage({ contentType: "text/html", data: template.html });
+  }
+  if (template.text) {
+    msg.addMessage({ contentType: "text/plain", data: template.text });
+  }
+
+  return msg.asRaw();
+}
+
 export function sendOptInConfirmation(
   email: string,
   config: OptKitConfig
 ): Effect.Effect<void, EmailSendError> {
   const template = config.templates?.optIn || defaultOptInTemplate;
-  const emailTemplate = template(email);
-  return sendEmail(email, emailTemplate, config);
+  return sendEmail(email, template(email), config);
 }
 
 export function sendOptOutConfirmation(
@@ -68,8 +56,7 @@ export function sendOptOutConfirmation(
   config: OptKitConfig
 ): Effect.Effect<void, EmailSendError> {
   const template = config.templates?.optOut || defaultOptOutTemplate;
-  const emailTemplate = template(email);
-  return sendEmail(email, emailTemplate, config);
+  return sendEmail(email, template(email), config);
 }
 
 export function sendNewSubscriberNotification(
@@ -79,10 +66,8 @@ export function sendNewSubscriberNotification(
   if (!config.adminEmail) {
     return Effect.void;
   }
-
   const template = config.templates?.newSubscriber || defaultNewSubscriberTemplate;
-  const emailTemplate = template(email);
-  return sendEmail(config.adminEmail, emailTemplate, config);
+  return sendEmail(config.adminEmail, template(email), config);
 }
 
 function sendEmail(
@@ -90,21 +75,25 @@ function sendEmail(
   template: EmailTemplate,
   config: OptKitConfig
 ): Effect.Effect<void, EmailSendError> {
+  if (!config.email) {
+    // Email binding not configured — skip silently
+    return Effect.void;
+  }
+
   if (!config.senderEmail) {
     return Effect.fail(new EmailSendError({
       email: to,
-      cause: new Error("senderEmail is required in OptKitConfig")
+      cause: new Error("senderEmail is required when email binding is configured")
     }));
   }
 
   return Effect.tryPromise({
     try: async () => {
-      const raw = createMimeMessage(
+      const raw = buildMimeMessage(
         config.senderEmail!,
         to,
-        template.subject,
-        template.html,
-        template.text
+        template,
+        config.senderName,
       );
 
       const emailMessage = new EmailMessage(
@@ -113,7 +102,7 @@ function sendEmail(
         raw
       );
 
-      await config.email.send(emailMessage);
+      await config.email!.send(emailMessage);
     },
     catch: (error) => new EmailSendError({
       email: to,
@@ -128,6 +117,13 @@ export function sendCampaignBatch(
   html: string,
   config: OptKitConfig
 ): Effect.Effect<{ sent: number; failed: number }, EmailSendError> {
+  if (!config.email) {
+    return Effect.fail(new EmailSendError({
+      email: emails[0] || "unknown",
+      cause: new Error("email binding (send_email) is required for campaigns — see https://developers.cloudflare.com/email-routing/email-workers/send-email-workers/")
+    }));
+  }
+
   if (!config.senderEmail) {
     return Effect.fail(new EmailSendError({
       email: emails[0] || "unknown",
@@ -143,11 +139,11 @@ export function sendCampaignBatch(
       const result = yield* Effect.either(
         Effect.tryPromise({
           try: async () => {
-            const raw = createMimeMessage(
+            const raw = buildMimeMessage(
               config.senderEmail!,
               email,
-              subject,
-              html
+              { subject, html },
+              config.senderName,
             );
 
             const emailMessage = new EmailMessage(
@@ -156,7 +152,7 @@ export function sendCampaignBatch(
               raw
             );
 
-            await config.email.send(emailMessage);
+            await config.email!.send(emailMessage);
           },
           catch: (error) => new EmailSendError({
             email,
@@ -167,7 +163,7 @@ export function sendCampaignBatch(
 
       if (result._tag === "Left") {
         failed++;
-        console.error(`Failed to send email to ${email}:`, result.left);
+        console.error(`Failed to send to ${email}:`, result.left);
       } else {
         sent++;
       }
@@ -176,4 +172,3 @@ export function sendCampaignBatch(
     return { sent, failed };
   });
 }
-
