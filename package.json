@@ -1,55 +1,35 @@
 {
   "name": "optkit",
-  "version": "1.1.0",
-  "description": "Email subscriber management for Cloudflare Workers. SQL-backed storage, queue-powered campaigns, built-in admin dashboard.",
+  "version": "0.0.1",
+  "private": true,
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./do": "./src/do.ts",
-    "./schema": "./src/schema.ts",
-    "./types": "./src/types.ts",
-    "./queue": "./src/queue.ts",
-    "./admin": "./src/admin.tsx"
-  },
-  "files": [
-    "src"
-  ],
-  "keywords": [
-    "cloudflare",
-    "workers",
-    "durable-objects",
-    "newsletter",
-    "subscribers",
-    "email",
-    "email-routing",
-    "send-email",
-    "queue",
-    "cloudflare-email"
-  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/acoyfellow/optkit.git"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "dependencies": {
-    "drizzle-orm": "^0.44.7",
-    "effect": "^3.18.4",
-    "mimetext": "^3.0.24"
-  },
-  "peerDependencies": {
-    "hono": "^4.9.7"
-  },
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250410.0",
-    "typescript": "^5.9.3"
+    "url": "git+https://github.com/acoyfellow/optkit.git"
   },
   "scripts": {
-    "build": "echo 'optkit: TypeScript source, no build needed'",
-    "prepublishOnly": "echo 'Ready to publish optkit'"
+    "typecheck": "./typecheck.sh",
+    "build:client": "bunx vite build --config client/vite.config.ts",
+    "lint": "biome check .",
+    "test": "bunx vitest run",
+    "test:prod": "node scripts/test-prod.mjs"
+  },
+  "dependencies": {
+    "effect": "4.1.2",
+    "hono": "4.9.7"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@cloudflare/workers-types": "5.20261102.1",
+    "@foldkit/vite-plugin": "0.29.0",
+    "alchemy": "0.87.0",
+    "esbuild": "0.28.2",
+    "foldkit": "0.170.0",
+    "happy-dom": "21.0.4",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "5.0.5",
+    "wrangler": "4.156.1"
   }
 }
